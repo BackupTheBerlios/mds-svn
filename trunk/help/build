@@ -1,0 +1,5 @@
+Building metaball packages module
+
+Example:
+mb build -l foo
+-l foo - list of atoms that will be included in package

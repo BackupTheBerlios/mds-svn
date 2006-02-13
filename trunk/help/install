@@ -1,0 +1,4 @@
+Intstallation syntax:
+mb install {filename}
+for ex:
+mb install apache-2.0.14-r2.athlonxp.mb

@@ -1,0 +1,19 @@
+#!/usr/bin/python -O
+# -*- coding: utf-8 -*-
+
+"""
+    Metaball runner
+"""
+
+import sys
+
+sys.path = ["/usr/lib/mb/pym"]+sys.path
+try:
+    import mb
+except:
+    print 'Error: couldn\'t load modules Check metaball installation'
+    sys.exit(1)
+
+if __name__ == "__main__":
+    mb.main(sys.argv)
+

@@ -1,0 +1,4 @@
+Removing syntax:
+mb remove {package}
+for ex:
+mb remove apache-2.0.14

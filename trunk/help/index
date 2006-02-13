@@ -1,0 +1,7 @@
+try:
+mb help install
+to get information about software installation using mb
+mb help build
+to get information about packages building
+mb help remove
+to get information about software removing
