@@ -1,4 +1,10 @@
+This module removes package (or portage atom) from system
+
 Removing syntax:
 mb remove {package}
-for ex:
+
+examples:
+
 mb remove apache-2.0.14
+mb remove apache-2.0.14.ebuild
+mb remove kde-network-x86.mb

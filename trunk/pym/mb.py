@@ -35,7 +35,7 @@ helpdir='/usr/lib/mb/help'
 
 def analyzeTarget(target):
     """
-    determines type of target file 
+    determine type of target file 
     """
     if os.access(target,os.F_OK):
         if '.list' in target:
@@ -118,7 +118,7 @@ def doPDirs(name):
 
 def getDirSize(path):
     """
-    recursively walks throw path and return total size
+    recursively walk throw path and return total size
     getDirSize(path) -> int
     """
     size = 0
@@ -126,10 +126,9 @@ def getDirSize(path):
         size = size + int(sum([os.path.getsize(os.path.join(root,name)) for name in files]))
     return size
 
-
 def findebuild(name,path):
     """
-    reuturns last matching ebuild file (abspath) in path and subdirs
+    reuturn last matching ebuild file (abspath) in path and subdirs
     usage:
     findebuild(name,path)
     """
@@ -148,25 +147,14 @@ def findebuild(name,path):
         if res != '':
             glres = res
 
-def installWalk(path):
-    """
-    Trys to install all files in paths and subdirs
-    """
-    filepath = path
-    for item in os.listdir(path):
-        filepath = path + "/" + item
-        if os.path.isfile(filepath):
-            if '.ebuild' in filepath:
-                install(filepath)
-        if os.path.isdir(filepath):
-            installWalk(filepath)
-
 def doMb(path, pkgname):
     """
-    creates metaball image file from path
+    create metaball image file from path
     doMB(path, pkgname)
     """
     pkgname = pkgname.split("/")[-1]
+    platform = portage.settings['CBUILD'].split('-')[0]
+    pkgname = pkgname + '-' + platform
     dirSize = getDirSize(path)
     print 'Size of dir: ' + str(dirSize)
     try:
@@ -236,10 +224,9 @@ def install(filename):
             install(target)
         target may be mb package, ebuild or portage atom name
     """
-    import os,sys,re
     print "Installing " + filename
-    if (".mb" in filename):
-        print "installing metaball uncompressed package"
+    if ('.mb' in filename):
+        print 'installing metaball uncompressed package'
         ## TODO обработка ситуации когда диры уже созданы
         ## вынести создание окружения в отдельную функцию 
         ## с параметрами build install и т. п.
@@ -253,12 +240,18 @@ def install(filename):
                     sys.exit()
             os.system('rm /tmp/mb -rf')
         os.makedirs('/tmp/mb')
-        os.system("mount -o loop " + filename + " /tmp/mb")
-        installWalk('/tmp/mb/portage')
+        os.system('mount -o loop ' + filename + ' /tmp/mb')
+        ## Recursive scan for ebuilds and their installation
+        for root, dirs, files in os.walk('/tmp/mb/portage'):
+            for name in files:
+                fn = os.path.join(root,name)
+                if '.ebuild' in fn:
+                    install(fn)
+                    
         os.system('umount /tmp/mb')
         os.system('rm /tmp/mb -rf')
-    if (".ebuild" in filename):
-        print "installing portage ebuild"
+    if ('.ebuild' in filename):
+        print 'installing portage ebuild'
         name, group = getGroupAppNamesFromEbuild(filename)
         if (name == 'None'):
             try:
@@ -289,7 +282,7 @@ def install(filename):
 
 def remove(packagename):
     """
-    removes target from systems
+    remove target from system
     """
     if '.mb' in packagename:
         print 'Removing metaball package ' + packagename
@@ -302,10 +295,16 @@ def remove(packagename):
                     sys.exit()
             os.system('rm /tmp/mb -rf')
         os.makedirs('/tmp/mb')
-        os.system("mount -o loop " + filename + " /tmp/mb")
-        ## TODO recursive removing here 
-        ##installWalk('/tmp/mb/portage')
-        
+        os.system('mount -o loop ' + packagename + ' /tmp/mb')
+        ## TODO recursive removing here
+        for root, dirs, files in os.walk('/tmp/mb/portage'):
+            for name in files:
+                fn = os.path.join(root, name)
+                if '.ebuild' in fn:
+                    name = fn.split('/')[-1]
+                    name = re.sub('\.ebuild','',name)
+                    os.system('emerge -C ='+name)
+                    
         os.system('umount /tmp/mb')
         os.system('rm /tmp/mb -rf')
 
@@ -319,7 +318,7 @@ def remove(packagename):
 
 def help(topic):
     """
-    Loads and show help topics
+    Load and show help topics
     """
     global helpdir
     try:
@@ -384,17 +383,17 @@ def main(args):
     ##        FilenameNumber = int(CmdLineOpts.index("build"))+1
     ##        build(CmdLineOpts[FilenameNumber])     
     elif (action == "remove"):
-        FilenameNumber = int(CmdLineOpts.index("remove"))+1
-        try:
-            filename = CmdLineOpts[FilenameNumber]
-            remove(filename)
-        except:
-            print "Error: cmd line options are incorrect !!!"
-            print "No suitable target for removing"
-            help("remove")
+        FilenameNumber = int(CmdLineOpts.index('remove'))+1
+        #try:
+        filename = CmdLineOpts[FilenameNumber]
+        remove(filename)
+        #except:
+        #    print 'Error: cmd line options are incorrect !!!'
+        #    print 'No suitable target for removing'
+        #    help('remove')
 
 
 ## If we're not imported
 if __name__ == "__main__":
-    main()
+    main(sys.argv)
 
