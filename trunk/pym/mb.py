@@ -121,16 +121,11 @@ def getDirSize(path):
     recursively walks throw path and return total size
     getDirSize(path) -> int
     """
-    filepath = path
-    size=0
-    for item in os.listdir(path):
-        filepath = path + "/" + item
-        if os.path.isfile(filepath):
-            size = size + os.path.getsize(filepath)
-
-        if os.path.isdir(filepath):
-            size = size + getDirSize(filepath)
+    size = 0
+    for root,dirs,files in os.walk(path):
+        size = size + int(sum([os.path.getsize(os.path.join(root,name)) for name in files]))
     return size
+
 
 def findebuild(name,path):
     """
@@ -161,8 +156,8 @@ def installWalk(path):
     for item in os.listdir(path):
         filepath = path + "/" + item
         if os.path.isfile(filepath):
-			if '.ebuild' in filepath:
-				install(filepath)
+            if '.ebuild' in filepath:
+                install(filepath)
         if os.path.isdir(filepath):
             installWalk(filepath)
 
@@ -175,7 +170,7 @@ def doMb(path, pkgname):
     dirSize = getDirSize(path)
     print 'Size of dir: ' + str(dirSize)
     try:
-        os.system('dd if=/dev/zero of=/tmp/'+ pkgname +'.mb count='+str(dirSize/800))
+        os.system('dd if=/dev/zero of=/tmp/'+ pkgname +'.mb count='+str(dirSize/500+1))
         os.system("echo 'y' | mkfs.ext2 /tmp/"+pkgname+".mb &> /dev/null")
     except:
         print 'Error: make image failed, exiting'
@@ -196,10 +191,10 @@ def build(filename):
         build(filename)
     """
     global glres
-    doPDirs("")
+
     filename = filename[:-1]
     print filename
-    overtrees = os.environ['PORTDIR_OVERLAY'].split(' ')
+    overtrees = portage.settings['PORTDIR_OVERLAY'].split(' ')
     ptrees = portage.settings['PORTDIR'].split(' ')
     alltrees = ptrees + overtrees
     for path in alltrees:
@@ -278,8 +273,8 @@ def install(filename):
                        let the group be app-misc"
                 group = 'app-misc'
         os.environ['PORTDIR_OVERLAY'] = portage.settings['PORTDIR_OVERLAY'] + ' ' + \
-			'/tmp/mb/portage'
-	## Copying ebuild to overlay            -- mbOverlay is going to be deprecated
+            '/tmp/mb/portage'
+    ## Copying ebuild to overlay            -- mbOverlay is going to be deprecated
         ##if os.access(mbOverlay+'/'+group+'/'+name, os.F_OK):
         ##    os.system('rm ' + mbOverlay+'/'+group+'/'+name+' -rf')
         ##os.makedirs(mbOverlay+'/'+group+'/'+name)
@@ -298,7 +293,7 @@ def remove(packagename):
     """
     if '.mb' in packagename:
         print 'Removing metaball package ' + packagename
-		if os.access('/tmp/mb', os.F_OK):
+        if os.access('/tmp/mb', os.F_OK):
             if os.path.ismount('/tmp/mb'):
                 try:
                     os.system('umount -l /tmp/mb')
@@ -309,9 +304,9 @@ def remove(packagename):
         os.makedirs('/tmp/mb')
         os.system("mount -o loop " + filename + " /tmp/mb")
         ## TODO recursive removing here 
-		##installWalk('/tmp/mb/portage')
+        ##installWalk('/tmp/mb/portage')
         
-		os.system('umount /tmp/mb')
+        os.system('umount /tmp/mb')
         os.system('rm /tmp/mb -rf')
 
     else:
@@ -375,11 +370,14 @@ def main(args):
         if '-l' in CmdLineOpts:
             listFilenameNumber = int(CmdLineOpts.index("-l"))+1
             if os.access(CmdLineOpts[listFilenameNumber],os.F_OK):
-		    packageList = open(CmdLineOpts[listFilenameNumber]).readlines()
-		    for package in packageList:
-			build(package)
+                packageList = open(CmdLineOpts[listFilenameNumber]).readlines()
+                doPDirs("")
+                for package in packageList:
+                    build(package)
+                doMb("/tmp/mb", CmdLineOpts[listFilenameNumber])
         else:
             stpoint = int(CmdLineOpts.index("build"))+1
+            doPDirs("")
             for package in CmdLineOpts[stpoint]:
                 build(package)
             doMb("/tmp/mb", CmdLineOpts[listFilenameNumber])
