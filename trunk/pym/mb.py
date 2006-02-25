@@ -32,6 +32,25 @@ helpdir='/usr/lib/mb/help'
 ##    os.makedirs(mbOverlay)
 ##os.environ['PORTDIR_OVERLAY'] = portage.settings['PORTDIR_OVERLAY'] + ' ' + mbOverlay
 
+def getListFromMb(filename):
+    ebuildList=[]
+    if os.access('/tmp/mb', os.F_OK):
+        if os.path.ismount('/tmp/mb'):
+            try:
+                os.system('umount -l /tmp/mb')
+            except:
+                print 'Error: Could not use dir for installation'
+                sys.exit()
+        os.system("rm /tmp/mb -rf")
+    os.makedirs('/tmp/mb')
+    os.system("su -c 'mount -o loop " + filename + " /tmp/mb'")
+    ## Recursive scan for ebuilds and their installation
+    for root, dirs, files in os.walk('/tmp/mb/portage'):
+        for name in files:
+            fn = os.path.join(root,name)
+            if '.ebuild' in fn:
+                ebuildList.append(fn)
+    return ebuildList
 
 def analyzeTarget(target):
     """
@@ -55,12 +74,11 @@ def getPNameFromFile(filename):
         getPNameFromFile(path)
     """
     if '.ebuild' in filename:
-        name = filename.split("/")[3]
+        name = filename.split("/")[-1]
         ebuildPWD = filename.split("/")
         ebuildFileName = ebuildPWD[-1]
         app = ebuildName = re.sub('\.ebuild','',ebuildFileName)
         name = app.split("-")[0]
-        print name
     else:
         name = filename
     if name != "":
@@ -79,6 +97,7 @@ def getGorupNameFromPath(path):
     if '.ebuild' in path:
         try:
             name = path.split("/")[-3]
+            print 'getgrname from path: ' + name
             return name
         except:
             return 'None'
@@ -171,15 +190,15 @@ def doMb(path, pkgname):
     os.system('umount -l /tmp/mbimage')
     os.system('rm /tmp/mbimage -rf')
     os.system('rm /tmp/mb -rf')
+    return pkgname
 
-def build(filename):
+def build(filename,inst='False'):
     """
     builds metaball package from filename source
     usage:
         build(filename)
     """
     global glres
-
     filename = filename[:-1]
     print filename
     overtrees = portage.settings['PORTDIR_OVERLAY'].split(' ')
@@ -209,15 +228,27 @@ def build(filename):
     #    print 'copying ebuild failed'
     #    sys.exit()
     os.environ['PKGDIR'] = '/tmp/mb/packages'
+    os.environ['PORTDIR_OVERLAY']=portage.settings['PORTDIR_OVERLAY'] + ' ' + '/tmp/mb/portage'
     cmd = 'ebuild /tmp/mb/portage/'+ebuildtreegroup+'/'\
         +atomname+'/'+ebuild+' package'
+    cmd2 = 'ebuild /tmp/mb/portage/'+ebuildtreegroup+'/'\
+        +atomname+'/'+ebuild+' clean'
     print 'Start building atom '
     if os.system(cmd) == 0:
         print 'building ' +  ' successful'
+        os.system(cmd2)
     else:
-        print 'error during building ' + ' skipping ..' 
-
-def install(filename):
+        print 'error during building ' + ' skipping ..'
+    if inst=='True':
+        atom = re.sub('\.ebuild','',ebuild)
+        cmd = 'emerge -K =' + atom
+        if os.system(cmd) == 0:
+            print 'installing ' +  ' successful'
+    else:
+        print 'error during installing ' + ' exiting ..'
+        sys.exit(1)
+ 
+def install(filename,pack='yes',overlay='/tmp/mb/portage'):
     """
     installs target
         usage:
@@ -253,30 +284,46 @@ def install(filename):
     if ('.ebuild' in filename):
         print 'installing portage ebuild'
         name, group = getGroupAppNamesFromEbuild(filename)
+        print 'groupfromebuild: ' + name +' '+ group
         if (name == 'None'):
             try:
                 name=getPNameFromFile(filename)
             except:
-                print 'no name'
-        if (group == 'None'):
+                ebuildPWD = filename.split("/")
+                ebuildFileName = ebuildPWD[-1]
+                app = ebuildName = re.sub('\.ebuild','',ebuildFileName)
+                name = app.split("-")[0]
+                print name
+        if (group == 'None' or len(group)==0):
             try:
                 group = getGorupNameFromPath(filename)
+                if group not in os.listdir('/usr/portage'):
+                    group='app-misc'
             except:
                 print "Couldn't determine atom group, \
                        let the group be app-misc"
                 group = 'app-misc'
         os.environ['PORTDIR_OVERLAY'] = portage.settings['PORTDIR_OVERLAY'] + ' ' + \
             '/tmp/mb/portage'
-    ## Copying ebuild to overlay            -- mbOverlay is going to be deprecated
-        ##if os.access(mbOverlay+'/'+group+'/'+name, os.F_OK):
-        ##    os.system('rm ' + mbOverlay+'/'+group+'/'+name+' -rf')
-        ##os.makedirs(mbOverlay+'/'+group+'/'+name)
-        ##os.system('cp '+filename+' '+mbOverlay+'/'+group+'/'+name)
+        if pack == 'no':
+            print 'group: ' + group
+            if os.access(overlay+'/'+group+'/'+name, os.F_OK):
+                os.system('rm ' + overlay+'/'+group+'/'+name+' -rf')
+            os.makedirs(overlay+'/'+group+'/'+name)
+            os.system('cp '+filename+' '+overlay+'/'+group+'/'+name)
         print 'emerging ' + name
         os.environ['PORTDIR_OVERLAY'] = portage.settings['PORTDIR_OVERLAY'] + \
-                ' ' + '/tmp/mb/portage'
+                ' ' + overlay
         os.environ['PKGDIR'] = '/tmp/mb/packages'
-        os.system('emerge '+group+'/'+name+' -K')
+        ebuildn = filename.split('/')[-1]
+        print group
+        if pack == 'no':
+            os.system('ebuild '+overlay+'/'+group+'/'+name+'/'+ebuildn+' digest')
+            os.system('ebuild '+overlay+'/'+group+'/'+name+'/'+ebuildn+' package')
+            os.system('emerge ' + group+'/'+name+' -K')
+        else:
+            os.system('emerge '+group+'/'+name+' -K')
+
     if ('.tar.gz' in filename) or ('.tar.bz2' in filename):
         print 'installing tarball'
 
@@ -303,7 +350,8 @@ def remove(packagename):
                 if '.ebuild' in fn:
                     name = fn.split('/')[-1]
                     name = re.sub('\.ebuild','',name)
-                    os.system('emerge -C ='+name)
+                    ##os.system('emerge -C ='+name)
+                    os.system('emerge -C '+name)
                     
         os.system('umount /tmp/mb')
         os.system('rm /tmp/mb -rf')
@@ -360,7 +408,7 @@ def main(args):
         FilenameNumber = int(CmdLineOpts.index("install"))+1
     ##        try:
         filename = CmdLineOpts[FilenameNumber]
-        install(filename)
+        install(filename,'no')
     ##        except:
     ##            print "Error: cmd line options are incorrect !!!"
     ##            print "No suitable target for instalation"
@@ -372,8 +420,13 @@ def main(args):
                 packageList = open(CmdLineOpts[listFilenameNumber]).readlines()
                 doPDirs("")
                 for package in packageList:
-                    build(package)
-                doMb("/tmp/mb", CmdLineOpts[listFilenameNumber])
+                    if '--clean' in CmdLineOpts:
+                        build(package,'True')
+                    else:
+                        build(package,'False')
+                pkgname = doMb("/tmp/mb", CmdLineOpts[listFilenameNumber])
+                if '--clean' in CmdLineOpts:
+                    remove('/tmp/'+pkgname+'.mb')
         else:
             stpoint = int(CmdLineOpts.index("build"))+1
             doPDirs("")
